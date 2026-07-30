@@ -1,16 +1,4 @@
 {
-  "name": "hime-interoperability-network",
-  "version": "1.0.0",
-  "description": "Hub Middleware de Interoperabilidad para Apps de Emergencias y Salud",
-  "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
-  "dependencies": {
-    "express": "^4.18.2"
-  }
-}
-{
   "name": "hime-network",
   "version": "1.0.0",
   "description": "HIME Interoperability Network Middleware",
