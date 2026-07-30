@@ -7,16 +7,17 @@ const Redis = require('ioredis');
 const app = express();
 app.use(express.json());
 
-// 1. Conexión a Redis en la nube
+// 1. Conexión a Redis
 const redisUrl = process.env.REDIS_URL;
 let alertQueue = null;
+let redisConnection = null;
 
 if (redisUrl) {
-  const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
-  alertQueue = new Queue('emergency-alerts', { connection });
+  redisConnection = new Redis(redisUrl, { maxRetriesPerRequest: null });
+  alertQueue = new Queue('emergency-alerts', { connection: redisConnection });
 }
 
-// 2. Control de tráfico (Rate Limiting) - Protección DoS
+// 2. Control de tráfico (Rate Limiting)
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minuto
   max: 100, // Máximo 100 peticiones por minuto por IP
@@ -24,16 +25,27 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// 3. Endpoint principal de salud
-app.get('/', (req, res) => {
+// 3. Endpoint principal (Verificación REAL mediante PING a Redis)
+app.get('/', async (req, res) => {
+  let isRedisHealthy = false;
+
+  if (redisConnection) {
+    try {
+      const pingResult = await redisConnection.ping();
+      isRedisHealthy = (pingResult === 'PONG');
+    } catch (error) {
+      isRedisHealthy = false;
+    }
+  }
+
   res.json({ 
     status: 'online', 
     network: 'HIME Interoperability Network',
-    redisConnected: !!redisUrl 
+    redisConnected: isRedisHealthy 
   });
 });
 
-// 4. Endpoint de Alerta con Validaciones de Seguridad
+// 4. Endpoint de Alerta con Autenticación Real
 app.post('/v1/emergency/alert', [
   body('patientId').isString().notEmpty().withMessage('patientId es requerido'),
   body('alertType').isIn(['medical', 'security', 'disaster']).withMessage('Tipo de alerta inválido'),
@@ -47,17 +59,18 @@ app.post('/v1/emergency/alert', [
     return res.status(400).json({ errors: errors.array() });
   }
 
-  // Verificar Autenticación BÁSICA por Encabezado
+  // Autenticación Real: Compara contra la variable API_KEY de Render (o una clave por defecto)
   const apiKey = req.headers['x-api-key'];
-  if (!apiKey) {
-    return res.status(401).json({ error: 'API Key no proporcionada en x-api-key' });
+  const validApiKey = process.env.API_KEY || 'sk-hime-prod-secret';
+  
+  if (!apiKey || apiKey !== validApiKey) {
+    return res.status(401).json({ error: 'API Key inválida o no proporcionada' });
   }
 
   const { idempotencyKey, patientConsentToken, ...alertData } = req.body;
 
   try {
-    // Si la cola Redis está activa, procesar asíncronamente
-    if (alertQueue) {
+    if (alertQueue && redisConnection && redisConnection.status === 'ready') {
       const job = await alertQueue.add('process-alert', {
         ...alertData,
         idempotencyKey,
@@ -75,8 +88,7 @@ app.post('/v1/emergency/alert', [
       });
     }
 
-    // Respuesta diferida si Redis no estuviera conectado
-    res.status(200).json({ status: 'received_unqueued', data: alertData });
+    res.status(503).json({ error: 'Servicio de cola no disponible en este momento' });
   } catch (error) {
     res.status(500).json({ error: 'Error interno del servidor', detail: error.message });
   }
