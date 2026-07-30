@@ -1,5 +1,30 @@
 {
-  "status": "online",
-  "network": "HIME Interoperability Network",
-  "redisConnected": true
+  "name": "hime-interoperability-network",
+  "version": "1.0.0",
+  "description": "Middleware robusto para interoperabilidad médica B2B SaaS",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "worker": "node worker.js",
+    "dev": "node index.js"
+  },
+  "keywords": [
+    "nodejs",
+    "healthcare",
+    "interoperability",
+    "bullmq",
+    "cybersecurity"
+  ],
+  "author": "HIME Engineering",
+  "license": "MIT",
+  "dependencies": {
+    "bullmq": "^5.10.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-rate-limit": "^7.4.0",
+    "express-validator": "^7.1.0",
+    "ioredis": "^5.4.1",
+    "opossum": "^8.1.4"
+  }
 }
+
